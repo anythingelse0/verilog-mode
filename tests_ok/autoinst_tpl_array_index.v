@@ -34,13 +34,13 @@ module autoinst_tpl_array_index
       .bitout                           (sbit[0]/*.[0]*/));      // Templated
 endmodule
 
-// Same element index twice warns "Couldn't Merge"
+// Same element index twice merges silently into a single-element range
 
 module autoinst_tpl_array_index_dup
   ();
    /*AUTOWIRE*/
    // Beginning of automatic wires (for undeclared instantiated-module outputs)
-   wire [6:0] dup [1:1];    // From u_a1 of autoinst_tpl_array_index_sub.v, ..., Couldn't Merge
+   wire [6:0] dup [1:1];    // From u_a1 of autoinst_tpl_array_index_sub.v, ...
    wire       dupbit [1:2]; // From u_a1 of autoinst_tpl_array_index_sub.v, ...
    // End of automatics
    /*

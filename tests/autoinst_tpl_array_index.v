@@ -24,7 +24,7 @@ module autoinst_tpl_array_index
      (/*AUTOINST*/);
 endmodule
 
-// Same element index twice warns "Couldn't Merge"
+// Same element index twice merges silently into a single-element range
 
 module autoinst_tpl_array_index_dup
   ();

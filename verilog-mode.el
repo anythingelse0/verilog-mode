@@ -9010,7 +9010,6 @@ Duplicate signals are also removed.  For example A[2] and A[1] become A[2:1]."
 	sv-comment sv-memory sv-enum sv-signed sv-type sv-multidim sv-busstring
 	sv-modport
 	sv-mem-low sv-mem-high	; Bounds of mergeable unpacked numeric ranges
-	sv-mem-ranges		; Unpacked numeric ranges, used to detect overlap
 	bus)
     ;; Shove signals so duplicated signals will be adjacent
     (setq in-list (sort in-list #'verilog-signals-sort-compare))
@@ -9025,7 +9024,6 @@ Duplicate signals are also removed.  For example A[2] and A[1] become A[2:1]."
 	      sv-memory  nil
 	      sv-mem-low nil
 	      sv-mem-high nil
-	      sv-mem-ranges nil
 	      sv-enum    (verilog-sig-enum sig)
 	      sv-signed  (verilog-sig-signed sig)
 	      sv-type    (verilog-sig-type sig)
@@ -9060,29 +9058,18 @@ Duplicate signals are also removed.  For example A[2] and A[1] become A[2:1]."
 		  (<= (string-to-number (match-string 1 mem))
 		      (string-to-number (match-string 2 mem))))
 	     ;; Merge ascending numeric ranges without expanding every
-	     ;; index.  Preserve the existing warning for overlapping
-	     ;; ranges from different ports or instances.
+	     ;; index.  Overlapping or duplicate ranges merge silently,
+	     ;; matching the packed-bit merge above.
 	     ;; Descending ranges are left alone so existing declarations
 	     ;; keep their direction.
 	     (let ((lo (string-to-number (match-string 1 mem)))
-		   (hi (string-to-number (match-string 2 mem)))
-		   (ranges sv-mem-ranges)
-		   (overlap nil))
+		   (hi (string-to-number (match-string 2 mem))))
 	       (when sv-memory  ; Mixed with an unmergeable form
 		 (setq buswarn ", Couldn't Merge"))
-	       (while ranges
-		 (let ((range (car ranges)))
-		   (when (and (<= lo (cdr range))
-			      (<= (car range) hi))
-		     (setq overlap t)))
-		 (setq ranges (cdr ranges)))
-	       (when overlap
-		 (setq buswarn ", Couldn't Merge"))
-	       (setq sv-mem-ranges (cons (cons lo hi) sv-mem-ranges)
-		     sv-mem-low (if sv-mem-low (min lo sv-mem-low) lo)
+	       (setq sv-mem-low (if sv-mem-low (min lo sv-mem-low) lo)
 		     sv-mem-high (if sv-mem-high (max hi sv-mem-high) hi))))
 	    (mem
-	     (when sv-mem-ranges  ; Mixed with a mergeable numeric range
+	     (when sv-mem-low  ; Mixed with a mergeable numeric range
 	       (setq buswarn ", Couldn't Merge"))
 	     (setq sv-memory (or sv-memory mem))))
       ;; Peek ahead to next signal
@@ -9119,7 +9106,7 @@ Duplicate signals are also removed.  For example A[2] and A[1] become A[2:1]."
 			   ;; original unpacked declaration rather than silently
 			   ;; changing its direction or expression.
 			   (sv-memory sv-memory)
-			   (sv-mem-ranges
+			   (sv-mem-low
 			    ;; Combined unpacked index span, ascending.
 			    (concat "["
 				    (int-to-string sv-mem-low)
@@ -12449,6 +12436,11 @@ If PAR-VALUES replace final strings with these parameter values."
 			       "/*" vl-mbits vl-bits
 			       "." (match-string 1 tpl-net) "*/")
 		       t t tpl-net)))
+      ;; "[].[]" is left when "[].[@]" is used on an instance whose name
+      ;; gives no @ value; catch it rather than emit a nonsense connection.
+      (when (string-match "\\[\\]\\.\\[\\]" tpl-net)
+	(verilog-warn-error "%s: AUTO_TEMPLATE `%s' expanded to an empty [].[] index; instance name has no value for @"
+			    (verilog-point-text) tpl-net))
       (setq tpl-net (verilog-string-replace-matches "\\[\\]\\[\\]" dflt-bits nil nil tpl-net))
       (setq tpl-net (verilog-string-replace-matches "\\[\\]" auto-inst-vector-tpl nil nil tpl-net)))
     ;; Insert it
@@ -12797,8 +12789,8 @@ Multiple Module Templates:
             .ptl_mapvalidx              (ptl_mapvalid[0]/*[3:0].[0]*/));
 
   and AUTOWIRE will declare \"wire [3:0] ptl_mapvalid [0:2];\".  The
-  indexes must be numeric for AUTOWIRE to combine them; connecting the
-  same index twice warns \"Couldn't Merge\" in the declaration comment.
+  indexes must be numeric for AUTOWIRE to combine them; overlapping or
+  duplicate indexes merge silently into the covering range.
 
   Alternatively, using a regular expression for @:
 
